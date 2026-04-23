@@ -9,24 +9,31 @@ namespace WinFormsApp1
     public partial class MainForm : Form
     {
         private List<Product> products;
-        private int nextId;
 
         public MainForm()
         {
             InitializeComponent();
-            InitializeData();
+            products = new List<Product>();
+            RefreshProductGrid();
+            UpdateStatistics();
+            Load += MainForm_Load;
         }
 
-        private void InitializeData()
+        private void MainForm_Load(object? sender, EventArgs e)
         {
-            products = new List<Product>();
-            nextId = 1;
+            try
+            {
+                LoadProductsFromDb();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Ошибка работы с БД", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
 
-            products.Add(new Product { Id = nextId++, Name = "Ноутбук Lenovo", Quantity = 15, Price = 45000, Category = "Электроника" });
-            products.Add(new Product { Id = nextId++, Name = "Мышь Logitech", Quantity = 50, Price = 1200, Category = "Периферия" });
-            products.Add(new Product { Id = nextId++, Name = "Клавиатура механическая", Quantity = 25, Price = 3500, Category = "Периферия" });
-            products.Add(new Product { Id = nextId++, Name = "Монитор 24\"", Quantity = 10, Price = 12000, Category = "Электроника" });
-
+        private void LoadProductsFromDb()
+        {
+            products = LocalDb.GetProducts();
             RefreshProductGrid();
             UpdateStatistics();
         }
@@ -64,18 +71,20 @@ namespace WinFormsApp1
                 lblLowStock.ForeColor = Color.Orange;
                 lblLowStock.Font = new Font(lblLowStock.Font, FontStyle.Bold);
             }
+            if (lowStockCount == 0)
+            {
+                lblLowStock.ForeColor = Color.Green;
+                lblLowStock.Font = new Font(lblLowStock.Font, FontStyle.Regular);
+            }
             if (zeroStockCount > 0)  // функционал нулевого остатка
             {
                 lblZeroStock.ForeColor = Color.Red;
                 lblZeroStock.Font = new Font(lblLowStock.Font, FontStyle.Bold);
             }
-            else
+            if (zeroStockCount == 0) // функционал нулевого остатка
             {
-                lblLowStock.ForeColor = Color.Green;
-                lblLowStock.Font = new Font(lblLowStock.Font, FontStyle.Regular);
-
                 lblZeroStock.ForeColor = Color.Green;
-                lblLowStock.Font = new Font(lblLowStock.Font, FontStyle.Regular);
+                lblZeroStock.Font = new Font(lblLowStock.Font, FontStyle.Regular);
             }
         }
 
@@ -84,11 +93,9 @@ namespace WinFormsApp1
             var addForm = new ProductForm();
             if (addForm.ShowDialog() == DialogResult.OK)
             {
-                var newProduct = addForm.Product;
-                newProduct.Id = nextId++;
-                products.Add(newProduct);
-                RefreshProductGrid();
-                UpdateStatistics();
+                var p = addForm.Product;
+                LocalDb.InsertProduct(p);
+                LoadProductsFromDb();
                 MessageBox.Show("Товар успешно добавлен!", "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
@@ -113,8 +120,8 @@ namespace WinFormsApp1
                 selectedProduct.Price = updatedProduct.Price;
                 selectedProduct.Category = updatedProduct.Category;
 
-                RefreshProductGrid();
-                UpdateStatistics();
+                LocalDb.UpdateProduct(selectedProduct);
+                LoadProductsFromDb();
                 MessageBox.Show("Товар успешно обновлен!", "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
@@ -133,9 +140,8 @@ namespace WinFormsApp1
             if (MessageBox.Show($"Вы уверены, что хотите удалить товар \"{selectedProduct.Name}\"?",
                 "Подтверждение удаления", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
             {
-                products.Remove(selectedProduct);
-                RefreshProductGrid();
-                UpdateStatistics();
+                LocalDb.DeleteProduct(selectedProduct.Id);
+                LoadProductsFromDb();
                 MessageBox.Show("Товар удален!", "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
@@ -161,7 +167,7 @@ namespace WinFormsApp1
         private void btnRefresh_Click(object sender, EventArgs e)
         {
             txtSearch.Clear();
-            RefreshProductGrid();
+            LoadProductsFromDb();
         }
 
         private void btnIncoming_Click(object sender, EventArgs e)
@@ -177,9 +183,8 @@ namespace WinFormsApp1
 
             if (quantityForm.ShowDialog() == DialogResult.OK)
             {
-                selectedProduct.Quantity += quantityForm.Quantity;
-                RefreshProductGrid();
-                UpdateStatistics();
+                LocalDb.ChangeQuantity(selectedProduct.Id, quantityForm.Quantity);
+                LoadProductsFromDb();
                 MessageBox.Show($"Товар \"{selectedProduct.Name}\" пополнен на {quantityForm.Quantity} шт.",
                     "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
@@ -200,9 +205,8 @@ namespace WinFormsApp1
             {
                 if (selectedProduct.Quantity >= quantityForm.Quantity)
                 {
-                    selectedProduct.Quantity -= quantityForm.Quantity;
-                    RefreshProductGrid();
-                    UpdateStatistics();
+                    LocalDb.ChangeQuantity(selectedProduct.Id, -quantityForm.Quantity);
+                    LoadProductsFromDb();
                     MessageBox.Show($"С товара \"{selectedProduct.Name}\" списано {quantityForm.Quantity} шт.",
                         "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
